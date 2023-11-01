@@ -19,7 +19,8 @@
 #include "aov_data.h"
 #include "operator_data.h"
 
-extern AtCritSec l_critsec;
+//extern AtCritSec l_critsec;
+extern AtMutex l_critsec;
 extern bool l_critsec_active;
 
 
@@ -32,28 +33,30 @@ extern bool l_critsec_active;
 inline bool lentil_crit_sec_init() {
     // Called in node_plugin_initialize. Returns true as a convenience.
     l_critsec_active = true;
-    AiCritSecInit(&l_critsec);
+    //AiCritSecInit(&l_critsec);
     return true;
 }
 
 inline void lentil_crit_sec_close() {
     // Called in node_plugin_cleanup
     l_critsec_active = false;
-    AiCritSecClose(&l_critsec);
+    //AiCritSecClose(&l_critsec);
 }
 
 inline void lentil_crit_sec_enter() {
     // If the crit sec has not been inited since last close, we simply do not enter.
     // (Used by Cryptomatte filter.)
-    if (l_critsec_active)
-        AiCritSecEnter(&l_critsec);
+    //if (l_critsec_active)
+    //    AiCritSecEnter(&l_critsec);
+    l_critsec.lock();
 }
 
 inline void lentil_crit_sec_leave() {
     // If the crit sec has not been inited since last close, we simply do not enter.
     // (Used by Cryptomatte filter.)
-    if (l_critsec_active)
-        AiCritSecLeave(&l_critsec);
+    //if (l_critsec_active)
+    //    AiCritSecLeave(&l_critsec);
+    l_critsec.unlock();
 }
 
 
@@ -208,7 +211,7 @@ public:
     }
     
 
-    void setup_camera (AtUniverse *universe) {
+    void setup_camera (AtUniverse *universe, AtRenderSession *render_session) {
         lentil_crit_sec_enter();
 
         destroy_buffers();
@@ -224,7 +227,7 @@ public:
         image.invalidate();
         if (bokeh_enable_image && !image.read(bokeh_image_path.c_str())){
             AiMsgError("[LENTIL CAMERA PO] Couldn't open bokeh image!");
-            AiRenderAbort();
+            AiRenderAbort(render_session);
         }
 
 
@@ -236,7 +239,7 @@ public:
 
 
 
-        redistribution = get_bidirectional_status(universe); // this should include AA level test
+        redistribution = get_bidirectional_status(universe, render_session); // this should include AA level test
         if (redistribution) {
             
             crypto_in_same_queue = false;
@@ -1148,7 +1151,7 @@ private:
     }
 
 
-     bool get_bidirectional_status(AtUniverse *universe) {
+     bool get_bidirectional_status(AtUniverse *universe, AtRenderSession *render_session) {
 
 
         if (!enable_dof) {
@@ -1164,7 +1167,7 @@ private:
         // if progressive rendering is on, don't redistribute
         if (enable_dof && bidir_sample_mult != 0 && AiNodeGetBool(AiUniverseGetOptions(universe), AtString("enable_progressive_render"))) {
             AiMsgError("[LENTIL BIDIRECTIONAL] Progressive rendering is not supported. Arnold does not yet provide enough API functionality for this to be implemented as it should.");
-            AiRenderAbort();
+            AiRenderAbort(render_session);
             return false;
         }
 
